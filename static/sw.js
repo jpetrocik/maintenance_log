@@ -1,5 +1,13 @@
-var CACHE_NAME = 'mileage_cache-v1.2';
-var urlsToCache = ['/mileage', '/css/mileage.css'];
+var CACHE_NAME = 'mileage_cache-v1.6';
+var urlsToCache = 
+[
+  '/mileage', 
+  '/service', 
+  '/css/mileage.css',
+  'scripts/jquery_3_3_1.min.js',
+  'scripts/bootstrap.min.js',
+  'css/bootstrap.min.css'
+];
 // [
 //   '/scripts/bootstrap_4_2_1.min.js',
 //   '/css/bootstrap_4_2_1.min.css',
@@ -21,15 +29,14 @@ self.addEventListener('install', function(event) {
 
 
 self.addEventListener('fetch', function (event) {
- event.respondWith(
-    caches.match(event.request)
-      .then(function(response) {
-        // Cache hit - return response
-        if (response) {
+  event.respondWith(
+    caches.open(CACHE_NAME).then(function(cache) {
+      return cache.match(event.request).then(function (response) {
+        return response || fetch(event.request).then(function(response) {
+          //cache.put(event.request, response.clone());
           return response;
-        }
-        return fetch(event.request);
-      }
-    )
+        });
+      });
+    })
   );	
 });

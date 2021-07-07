@@ -1,6 +1,7 @@
 const pool = require('./mysql.js');
 const config = require("./config.json");
 const tokenGenerator = require('./tokens.js');
+const { call } = require('body-parser');
 
 const SERVICE_LOG_TABLE = "service_history";
 const SCHEDULE_LOG_TABLE = "scheduled_maintenance";
@@ -14,13 +15,14 @@ let executeQuery = function(sqlStatement, sqlParams, callback) {
 	pool.query(sqlStatement, sqlParams, (error, results, fields) => {
 		if (error)
 			console.log(error);
-		callback(error, results);
+		if (callback)
+			callback(error, results);
 	});
 };
 
 let serviceLog = {
 	myGarage: function(utoken, callback) {
-		executeQuery("select iToken as token, name from " + CAR_DETAILS_TABLE + " c left join " + CAR_INVITATIONS + " i ON c.id=i.carId \
+		executeQuery("select iToken as token, name, mileage from " + CAR_DETAILS_TABLE + " c left join " + CAR_INVITATIONS + " i ON c.id=i.carId \
 			where c.status='ACTIVE' and i.uToken=? \
 		 	order by c.year desc, c.make asc, c.model asc, c.id desc", [utoken], callback);
 	},
@@ -46,7 +48,7 @@ let serviceLog = {
 	},
 
 	carDetails: function(carId, callback) {
-		executeQuery("select c.*, max(mileage) as mileage, DATEDIFF(now(), max(created_date)) as mileageReportedDays \
+		executeQuery("select c.*, max(m.mileage) as mileage, DATEDIFF(now(), max(m.created_date)) as mileageReportedDays \
 			from " + CAR_DETAILS_TABLE + " c LEFT JOIN " + MILEAGE_LOG_TABLE + " m ON c.id=m.carId \
 			where c.id=?",
 			[carId], (err, results) => {callback(err, results[0])});
@@ -62,34 +64,42 @@ let serviceLog = {
 	},
 
 	serviceDue: function(carId, callback) {
-		serviceLog.carDetails(carId, (err, carDetails) => {
-			let serviceSql = "select ms.carId, ms.id, ms.service, ms.mileage, ms.months, max(s.serviceDate) as last_service_date, max(s.mileage) as last_service_mileage, \
-				DATE_ADD(COALESCE(max(s.serviceDate),c.inserviceDate), INTERVAL months  MONTH) as due_by, \
-				DATEDIFF(DATE_ADD(COALESCE(max(s.serviceDate),c.inserviceDate), INTERVAL months  MONTH), now()) as  due_in_days, \
-				COALESCE(max(s.mileage),0)+ms.mileage-? as due_in_miles \
-				from " + CAR_DETAILS_TABLE + " c left join " + SCHEDULE_LOG_TABLE + " ms on c.id=ms.carId left outer join " + SERVICE_LOG_TABLE + " s on s.service=ms.service and \
-				s.carId=ms.carId where ms.carId=? \
-				group by ms.id, ms.service, ms.mileage, ms.months";
-			let upcomingServiceSql = "select * from (" + serviceSql + ") as s where due_in_days<30 or due_in_miles<500";
-			executeQuery(upcomingServiceSql, [carDetails.mileage, carId], callback);
-		});
+		let serviceSql = "select ms.carId, ms.id, ms.service, ms.mileage, ms.months, max(s.serviceDate) as last_service_date, max(s.mileage) as last_service_mileage, \
+			DATE_ADD(COALESCE(max(s.serviceDate),c.inserviceDate), INTERVAL months  MONTH) as due_by, \
+			DATEDIFF(DATE_ADD(COALESCE(max(s.serviceDate),c.inserviceDate), INTERVAL months  MONTH), now()) as  due_in_days, \
+			COALESCE(max(s.mileage),0)+ms.mileage-c.mileage as due_in_miles \
+			from " + CAR_DETAILS_TABLE + " c left join " + SCHEDULE_LOG_TABLE + " ms on c.id=ms.carId left outer join " + SERVICE_LOG_TABLE + " s on s.service=ms.service and \
+			s.carId=ms.carId where ms.carId=? \
+			group by ms.id, ms.service, ms.mileage, ms.months";
+		let upcomingServiceSql = "select * from (" + serviceSql + ") as s where due_in_days<30 or due_in_miles<500 order by due_in_days, due_in_miles";
+		executeQuery(upcomingServiceSql, [carId], callback);
 	},
 
 	addServiceLog: function(carId, serviceDate, mileage, service, cost, note, callback) {
-		var serviceRecord = {carId: carId, serviceDate: serviceDate, mileage: mileage, service: service.trim() }
-		if (cost == undefined || cost != '') {
-			serviceRecord.cost = cost;
-		}
+		this.carDetails(carId, (error, car) => {
 
-		if (note) {
-			serviceRecord.note =note.trim()
-		}
+			if (!mileage) {
+				mileage = car.mileage;
+			}
 
-		var sqlParams  = serviceRecord;
-		executeQuery("INSERT INTO " + SERVICE_LOG_TABLE + " SET ?", sqlParams, (err, results) => {
-			serviceLog.addMileage(carId, mileage, () => { 
-				callback(err, results);
-			});
+			if (!serviceDate) {
+				serviceDate = new Date();
+			}
+	
+			var serviceRecord = {carId: carId, mileage: mileage, serviceDate: serviceDate, service: service.trim() }
+
+			if (cost) {
+				serviceRecord.cost = cost;
+			}
+	
+			if (note) {
+				serviceRecord.note = note.trim()
+			}
+	
+			var sqlParams  = serviceRecord;
+	
+			executeQuery("INSERT INTO " + SERVICE_LOG_TABLE + " SET ?", sqlParams, callback);
+	
 		});
 	},
 
@@ -125,7 +135,10 @@ let serviceLog = {
 	addMileage: function(carId, mileage, callback) {
 		var sqlParams = {carId: carId, mileage: mileage};
 		var sql = "INSERT INTO " + MILEAGE_LOG_TABLE + " SET ?";
-		executeQuery(sql, sqlParams, callback);
+		executeQuery(sql, sqlParams, (error, results) => {
+			if (!error)
+				executeQuery("UPDATE " + CAR_DETAILS_TABLE + " SET mileage=? WHERE id=?", [mileage, carId], callback);
+		});
 	}
 
 }

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
- 	<link rel="apple-touch-icon" sizes="57x57" href="images/apple-icon-57x57.png">
+	 <link rel="apple-touch-icon" sizes="57x57" href="images/apple-icon-57x57.png">
 	<link rel="apple-touch-icon" sizes="60x60" href="images/apple-icon-60x60.png">
 	<link rel="apple-touch-icon" sizes="72x72" href="images/apple-icon-72x72.png">
 	<link rel="apple-touch-icon" sizes="76x76" href="images/apple-icon-76x76.png">
@@ -48,28 +48,38 @@
   </div>
 </nav>
 
-<div id="mileageConfirm" class="toast position-absolute" style="width:100%; z-index:45;" role="alert" aria-live="assertive" aria-atomic="true">
-  <div class="toast-header">
-	<strong class="me-auto">
-		<span id="service_good" style="display: none;"><i class="bi bi-check-circle-fill text-success"></i> Thank You!</span>
-		<span id="service_due" style="display: none;"><a  class="text-danger" href="service"><i class="bi bi-check-circle-fill"></i> Service Due</span></a>
-	</strong>
-	<button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-  </div>
-</div>
-
-
 <div id="mainContent" class="container mt-4">
 	<div id="carList" class="btn-group-vertical w-100">
 		<div class="btn btn-secondary m-1 car" style="display:none"></div>
 	</div>
 
-	<div id="mileageForm" class='mt-4'>
-		<a anchor="mileage"></a>
-		<input id="carToken" type="hidden"/>
-		<input id="mileage" class="form-control m-1 pt-0 pb-0" type="number"/>
-		<button id="submitMileage" class="btn btn-primary w-100 m-1">Submit</button>
+	<div id="serviceList" class="btn-group-vertical w-100">
+		<div class="service w-100 m-4" style="display:none;">
+			<div class="card">
+			<div class="card-header">
+				Overdue Service
+			</div>
+			<div class="card-body">
+				<p class="card-text"><span>Oil Change</span><small class="text-muted">(-475 miles)</small></p>
+				<a href="#" class="btn btn-secondary">Completed</a>
+			</div>
+			</div>
+		</div>
+
+		<div class="serviceForm w-100 m-4" style="display:none;">
+			<div class="card">
+				<div class="card-header">
+					Add Service
+				</div>
+				<div class="card-body">
+					<input id="service" placeholder="Enter Description" class="serviceDescr form-control m-1 pt-0 pb-0"/>
+					<a href="#" class="btn btn-secondary">Save</a>
+				</div>
+			</div>
+		</div>
 	</div>
+
+
 </div>
 
 <!-- jQuery first, then Popper.js, then Bootstrap JS -->
@@ -97,27 +107,88 @@ $( document ).ready(function() {
 	  });
 	}
 
-	let mileageConfirmToast = new bootstrap.Toast(document.querySelector("#mileageConfirm"), { delay: 10000});
+	let setupSubmitServiceForm = function(carToken) {
+		let serviceForm = serviceFormTemplate.clone();
+		serviceForm.attr("carToken", carToken);
+		serviceForm.find(".card-body .btn").on("click", function(e) {
+			$.ajax({
+				url: "api/car/" + carToken + "/service",
+				type: "POST",
+				data: { service: serviceForm.find(".serviceDescr").val()},
+				success: function(results) {
+					let newServiceForm = serviceForm.find(".card");
+					serviceForm.find(".serviceDescr").val("");
+				}
+			});
+			e.preventDefault();
+		});
 
-	let resetPage = function() {
-		$("#carList .car").removeClass("selected");
-		$("#mileage").prop("disabled",true);
-		$("#mileage").val("");
-		$("#mileage").prop("placeholder","Select Car");
+		return serviceForm;
 	};
 
-	let setupMileageForm = function(carToken) {
-		$("#carToken").val(carToken);
-		$("#mileage").prop("disabled",false);
-		$("#mileage").prop("placeholder","Enter Mileage");
-		$("#mileage").focus();
+	let setupServiceForm = function(carToken) {
+		$.ajax({
+			url: "api/car/" + carToken + "/schedule",
+			type: "GET",
+			success: function(results) {
+				$("#serviceList").empty();
+
+				if (results.length > 0) {
+					results.forEach(function (o, i) {
+						let serviceRecord = serviceTemplate.clone();
+						if (o.due_in_days < 0 || o.due_in_miles < 0)
+							serviceRecord.find(".card-header").addClass("bg-danger").html("<i class=\"bi bi-exclamation-triangle-fill\"></i> Overdue Service");
+						else
+							serviceRecord.find(".card-header").addClass("bg-warning").html("<i class=\"bi bi-shield-exclamation\"></i> Service Soon");
+
+						serviceRecord.find(".card-text span").html(o.service);
+
+						if (o.due_in_miles < 0)
+							serviceRecord.find(".card-text small").html("(" + o.due_in_miles + " miles)");
+						else if (o.due_in_days < 0)
+							serviceRecord.find(".card-text small").html("(" + o.due_in_days + " days)");
+
+						serviceRecord.find(".card-body .btn").on("click", function(e) {
+							$.ajax({
+								url: "api/car/" + carToken + "/service",
+								type: "POST",
+								data: { service: o.service},
+								success: function(results) {
+									serviceRecord.fadeOut();
+								}
+							})
+							e.preventDefault();
+						});
+
+						serviceRecord.attr("carToken", o.token);
+						serviceRecord.show();
+
+						$("#serviceList").append(serviceRecord);
+					});
+				}
+
+				let serviceForm = setupSubmitServiceForm(carToken);
+				serviceForm.show();
+				$("#serviceList").append(serviceForm);
+			},
+			error: function(jqXHR, textStatus, errorThrown) {
+				$("#mainContent").hide();
+			}
+		})
 	};
 
 	let setSelectedCar = function(selectedCar) {
 		$("#carList .car").removeClass("selected");
 		selectedCar.addClass("selected");
+		$("#serviceList").empty();
+		$("#serviceList").insertAfter(selectedCar);
 		let carToken = selectedCar.attr("carToken");
-		setupMileageForm(carToken);
+		setupServiceForm(carToken);
+	}
+
+	let unselectCar = function(selectedCar) {
+		selectedCar.removeClass("selected");
+		$("#serviceList").empty();
 	}
 
 	let loadCarData = function() {
@@ -135,7 +206,10 @@ $( document ).ready(function() {
 						newCar.attr("carToken", o.token);
 						newCar.on("click", function(e, f) {
 							let selectedCar = $(e.currentTarget);
-							setSelectedCar(selectedCar);
+							if (selectedCar.hasClass("selected"))
+							    unselectCar(selectedCar);
+							else
+								setSelectedCar(selectedCar);
 						});
 
 						newCar.show();
@@ -149,6 +223,10 @@ $( document ).ready(function() {
 						let requestedCar = $(".car[carToken=" + cTokenParam+ "]")
 						if (requestedCar.length > 0) {
 							setSelectedCar(requestedCar);
+							$('html, body').animate({
+								scrollTop: ($("#carList .car.selected").offset().top - $("nav").outerHeight() - 10)
+							},200);
+
 						}
 					}
 
@@ -162,45 +240,12 @@ $( document ).ready(function() {
 		});
 	}
 
-	resetPage();
+	//resetPage();
 
 	//save templates
 	let carTemplate = $("#carList .car").clone();
-
-	//submit mileage
-	$("#submitMileage").on("click", function(e) {
-		let carToken = $("#carToken").val();
-		let mileage = $("#mileage").val();
-		if (mileage.length === 0) {
-			return false;
-		}
-
-		resetPage();
-
-		$.ajax({
-			url: "api/car/" + carToken + "/mileage/" + mileage,
-			type: "PUT",
-			success: function(results) {
-				let dateFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
-
-				if (results.length > 0) {
-					$("#service_due").show();
-					$("#service_due a").attr("href", "service?cToken=" + carToken);
-					$("service_good").hide();
-				} else {
-					$("#service_due").hide();
-					$("service_good").show();
-				}
-
-				mileageConfirmToast.show();
-
-			}
-		});
-		e.preventDefault();
-
-		return false;
-	});
-
+	let serviceTemplate = $("#serviceList .service").clone();
+	let serviceFormTemplate = $("#serviceList .serviceForm").clone();
 
 	loadCarData();
 

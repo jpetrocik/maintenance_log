@@ -98,6 +98,16 @@ app.get('/mileage', function (req, res) {
 	});
 });
 
+app.get('/service', function (req, res) {
+	invitations.validateUser(req, res, (err, uToken) => {
+	   if (!uToken) {
+		   res.status(401);
+		   res.render('validateCode');
+		   return;
+	   }
+	   res.render('service');
+   });
+});
 
 app.listen(3000, function () {
   console.log('Service Log listening on port 3000!');

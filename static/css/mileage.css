@@ -1,32 +1,28 @@
-
-#mainContent .btn-group-vertical {
-	width:100%;
+.service .required {
+	font-weight: 700;
 }
+
+.service .soon {
+	font-weight: 500;
+}
+
 
 #mainContent .btn-group-vertical .btn {
     border-radius: 5px;
 }
 
 #mainContent .btn {
-    background-color: #afafaf;
-    color: #fff;
     text-align: center;
     font-size:18px;
     cursor: pointer;
 }
 
 #mainContent .btn.selected { 
-    background-color: #0663a5;
+    background-color: #0d6efd;
 }
-
-#mileageForm .btn_submit {
-	width: 100%;
-    background-color: #0663a5;
-}
-
 
 #mileageReport {
-   border: 1px solid #0062a7;
+   border: 1px solid #0d6efd;
 }
 
 #mileageReport h2 {
@@ -35,8 +31,6 @@
 
 #mileageReport .header {
 	font-size: 18px;
-	background-color: #0062a7;
-	color: #fff;
 }
 
 #mileageReport .serviceDue {
@@ -52,7 +46,6 @@
 #mileageReport .serviceDue .btn{
     width: 150px;
     font-size: small;
-    background-color: #bf3434;
 }
 
 #mileageReport .serviceSchedule {
@@ -60,33 +53,7 @@
 	font-size: 14px;
 }
 
-#mileageReport .stats {
-	width: 100%;
-	border-collapse: collapse;
-	margin-bottom: 15px;
-}
 
-#mileageReport .stats td {
-	padding: 0 5px 0 5px;
-}
-
-#mileageReport .stats .label {
-	text-align: right;
-}
-
-#mileageReport .stats .data {
-	text-align: left;
-}
-
-#mileageReport .close {
-	color: #fff;
-	opacity: 1;
-	text-shadow: none;
-}
-
-#mileageReport .modal-header {
-	border-radius: 0px;
-}
 
 
 
